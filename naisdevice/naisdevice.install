@@ -1,0 +1,243 @@
+pre_install() {
+
+
+	{
+	    :
+	}
+
+	{
+	    :
+
+	pkill device-agent
+	pkill device-agent-helper
+	pkill naisdevice-systray
+	pkill naisdevice-agent
+	pkill naisdevice-helper
+
+	}
+
+	if [ "${1}" = "install" -a -z "${2}" ]
+	then
+	    before_install
+	elif [ "${1}" = "upgrade" -a -n "${2}" ]
+	then
+	    upgradeFromVersion="${2}"
+	    before_upgrade "${upgradeFromVersion}"
+	elif [ "${1}" = "install" -a -n "${2}" ]
+	then
+	    upgradeFromVersion="${2}"
+	    # Executed when a package is removed but its config files aren't,
+	    # and a new version is installed.
+	    # Looks a _lot_ like an upgrade case, I say we just execute the
+	    # same "before upgrade" script as in the previous case
+	    before_upgrade "${upgradeFromVersion}"
+	elif echo "${1}" | grep -E -q '(fail|abort)'
+	then
+	    echo "Failed to install before the pre-installation script was run." >&2
+	    exit 1
+	fi
+}
+
+post_install() {
+	gtk-update-icon-cache -q -t -f usr/share/icons/hicolor
+
+
+	after_upgrade() {
+	    :
+	set -o err
+
+	update-ca-certificates
+
+	# Assert just _one_ logged-in user
+	user_accounts=$(loginctl list-users --output json | jq '[.[] | select(.uid >= 1000)]')
+	if echo "$user_accounts" | jq -e 'length != 1' > /dev/null; then
+		printf "\nMore than 1 user account logged in! naisdevice only permits _one_ user account!\n"
+		exit 1
+	fi
+
+	# Assert only whitelisted service accounts "logged in" (if logged in at all)
+	service_accounts=$(loginctl list-users --output  json | jq -e '[.[] | select(.uid < 1000)]')
+	if echo "$service_accounts" | jq -e 'length > 0' > /dev/null; then
+		is_not_whitelisted=0
+
+		whitelisted_service_accounts="gdm,"
+		for account in $(echo "$service_accounts" | jq -r '.[].user'); do
+			if ! echo "$whitelisted_service_accounts" | grep --quiet --silent --perl-regexp "(^|,)$account(,|$)"; then
+				is_not_whitelisted=1
+				break
+			fi
+		done
+
+		if [ "$is_not_whitelisted" = "1" ]; then
+			printf "\nYou've got service-users running on your system which require being logged in.\n"
+			printf "\tThis is the list of whitelisted service_accounts: %s\n" $whitelisted_service_accounts
+			echo "Are you perhaps running an unsupported display manager/desktop environment? Ref: https://doc.nais.io/device/install/#ubuntu-installation"
+			exit 1
+		fi
+	fi
+
+	ln -sf /usr/bin/naisdevice-systray /usr/bin/naisdevice
+
+	user=$(echo "$user_accounts" | jq -r ".[0].user")
+	home=$(getent passwd "${user}" | cut -d: -f 6)
+
+	config_dir="${home}/.config/naisdevice/"
+	log_dir="${config_dir}/logs"
+
+	for directory in "$config_dir" "$log_dir"; do
+		mkdir -p "$directory"
+		chmod 700 "$directory"
+	done
+
+	cp /sys/devices/virtual/dmi/id/product_serial "${config_dir}"
+
+	chown -R "${user}:" "${config_dir}"
+
+	set +e
+	killall -9 --older-than 1m --regexp "naisdevice.*" || true
+
+
+	systemctl --system daemon-reload >/dev/null || true
+	debsystemctl=$(command -v deb-systemd-invoke || echo systemctl)
+	if ! systemctl is-enabled naisdevice-helper >/dev/null 
+	then
+	  : # Ensure this if-clause is not empty. If it were empty, and we had an 'else', then it is an error in shell syntax
+	    systemctl enable naisdevice-helper >/dev/null || true
+	    $debsystemctl start naisdevice-helper >/dev/null || true
+	else
+	    $debsystemctl restart naisdevice-helper >/dev/null || true
+	fi
+	}
+
+	after_install() {
+	    :
+	set -o err
+
+	update-ca-certificates
+
+	# Assert just _one_ logged-in user
+	user_accounts=$(loginctl list-users --output json | jq '[.[] | select(.uid >= 1000)]')
+	if echo "$user_accounts" | jq -e 'length != 1' > /dev/null; then
+		printf "\nMore than 1 user account logged in! naisdevice only permits _one_ user account!\n"
+		exit 1
+	fi
+
+	# Assert only whitelisted service accounts "logged in" (if logged in at all)
+	service_accounts=$(loginctl list-users --output  json | jq -e '[.[] | select(.uid < 1000)]')
+	if echo "$service_accounts" | jq -e 'length > 0' > /dev/null; then
+		is_not_whitelisted=0
+
+		whitelisted_service_accounts="gdm,"
+		for account in $(echo "$service_accounts" | jq -r '.[].user'); do
+			if ! echo "$whitelisted_service_accounts" | grep --quiet --silent --perl-regexp "(^|,)$account(,|$)"; then
+				is_not_whitelisted=1
+				break
+			fi
+		done
+
+		if [ "$is_not_whitelisted" = "1" ]; then
+			printf "\nYou've got service-users running on your system which require being logged in.\n"
+			printf "\tThis is the list of whitelisted service_accounts: %s\n" $whitelisted_service_accounts
+			echo "Are you perhaps running an unsupported display manager/desktop environment? Ref: https://doc.nais.io/device/install/#ubuntu-installation"
+			exit 1
+		fi
+	fi
+
+	ln -sf /usr/bin/naisdevice-systray /usr/bin/naisdevice
+
+	user=$(echo "$user_accounts" | jq -r ".[0].user")
+	home=$(getent passwd "${user}" | cut -d: -f 6)
+
+	config_dir="${home}/.config/naisdevice/"
+	log_dir="${config_dir}/logs"
+
+	for directory in "$config_dir" "$log_dir"; do
+		mkdir -p "$directory"
+		chmod 700 "$directory"
+	done
+
+	cp /sys/devices/virtual/dmi/id/product_serial "${config_dir}"
+
+	chown -R "${user}:" "${config_dir}"
+
+	set +e
+	killall -9 --older-than 1m --regexp "naisdevice.*" || true
+
+
+	systemctl --system daemon-reload >/dev/null || true
+	debsystemctl=$(command -v deb-systemd-invoke || echo systemctl)
+	systemctl enable naisdevice-helper >/dev/null || true
+	$debsystemctl start naisdevice-helper >/dev/null || true
+	}
+
+	if [ "${1}" = "configure" -a -z "${2}" ] || \
+	   [ "${1}" = "abort-remove" ]
+	then
+	    # "after install" here
+	    # "abort-remove" happens when the pre-removal script failed.
+	    #   In that case, this script, which should be idemptoent, is run
+	    #   to ensure a clean roll-back of the removal.
+	    after_install
+	elif [ "${1}" = "configure" -a -n "${2}" ]
+	then
+	    upgradeFromVersion="${2}"
+	    # "after upgrade" here
+	    # NOTE: This slot is also used when deb packages are removed,
+	    # but their config files aren't, but a newer version of the
+	    # package is installed later, called "Config-Files" state.
+	    # basically, that still looks a _lot_ like an upgrade to me.
+	    after_upgrade "${2}"
+	elif echo "${1}" | grep -E -q "(abort|fail)"
+	then
+	    echo "Failed to install before the post-installation script was run." >&2
+	    exit 1
+	fi
+	update-desktop-database -q
+}
+
+pre_upgrade() {
+	pre_install
+}
+
+post_upgrade() {
+	post_install
+}
+
+pre_remove() {
+
+
+	{
+	    :
+
+	systemctl stop naisdevice-helper >/dev/null || true
+	systemctl disable naisdevice-helper >/dev/null || true
+	systemctl --system daemon-reload >/dev/null || true
+	}
+
+	dummy() {
+	    :
+	}
+
+	if [ "${1}" = "remove" -a -z "${2}" ]
+	then
+	    # "before remove" goes here
+	    before_remove
+	elif [ "${1}" = "upgrade" ]
+	then
+	    # Executed before the old version is removed
+	    # upon upgrade.
+	    # We should generally not do anything here. The newly installed package
+	    # should do the upgrade, not the uninstalled one, since it can't anticipate
+	    # what new things it will have to do to upgrade for the new version.
+	    dummy
+	elif echo "${1}" | grep -E -q "(fail|abort)"
+	then
+	    echo "Failed to install before the pre-removal script was run." >&2
+	    exit 1
+	fi
+}
+
+post_remove() {
+	gtk-update-icon-cache -q -t -f usr/share/icons/hicolor
+	update-desktop-database -q
+}
