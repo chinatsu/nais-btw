@@ -8,8 +8,8 @@ arch=('x86_64')
 url="https://github.com/nais/cli"
 license=('MIT')
 options=('!strip' '!emptydirs')
-source=('https://github.com/nais/nais-ppa/raw/main/nais_1.20220427134822.deb')
-b2sums=('ba922e44a6c4ccb60f2638b950b94a6bc754acf2c520b2f3d7c8b1bbd24b6ed559761eb4edec28bd1bf1b33673583ab02a6afab14bd3508a34fb8260a67f5d2c')
+source=('https://github.com/nais/nais-ppa/raw/main/nais_1.20220518063638.deb')
+b2sums=('9abcff36a81a030b79c801e018f686f69f007ade6e1d6b6aa15e5e6eb2f3d4b02c00ada7dbdf0214c6e74f5ecec19f0653aece4325a1c006c144f818d47f7941')
 
 package(){
 
