@@ -7,14 +7,13 @@ pkgdesc="Naisdevice is a mechanism enabling NAVs developers to connect to intern
 arch=('x86_64')
 url="https://doc.nais.io/device"
 license=('MIT')
-depends=('bash-completion' 'glib2' 'gtk3' 'libappindicator-gtk3' 'nss' 'openssl' 'wireguard-tools')
+depends=('bash-completion' 'glib2' 'gtk3' 'libappindicator-gtk3' 'nss' 'openssl' 'wireguard-tools' 'libayatana-appindicator')
 options=('!strip' '!emptydirs')
 install=${pkgname}.install
 source=("https://github.com/nais/nais-ppa/raw/main/naisdevice-2022-06-13-135401.deb")
 b2sums=('0703f6ebdaeb10c03cb953f37e0671d01f47f4e872096378667b5336b84ddd39583f614afb10e33008c4334f35b40c2bb423a9b2a60f2f60966655489254b0ae')
 
 package(){
-
 	# Extract package data
 	tar -xz -f data.tar.gz -C "${pkgdir}"
 
@@ -23,10 +22,10 @@ package(){
 
 	mv usr/sbin/* usr/bin; rm -rf usr/sbin
 	ls usr/share/applications/*.desktop | while read line; do
+	sed -i s'/^Exec=naisdevice/Exec=\/usr\/bin\/naisdevice\-systray/g' "$line"
 	sed -i s'/^Exec=\/usr\/sbin\//Exec=\/usr\/bin\//g' "$line"
 	done
 	mkdir -p usr/lib 2> /dev/null; mv lib/* usr/lib; rm -rf lib
 
 	cd ..
-
 }
